@@ -1,0 +1,19 @@
+{
+	"title": "Speed Factor Initiative",
+	"description": "Implements Speed Factor Initiative for D&D 5e.",
+	"version": "0.0.1",
+	"compatibility": {
+		"minimum": "10"
+	},
+	"scripts": [
+		"scripts/sfi.js"
+	],
+	"socket": true,
+	"id": "speed-factor-initiative",
+	"authors": [
+		{
+			"name": "IHaveThatPower",
+			"flags": {}
+		}
+	]
+}
