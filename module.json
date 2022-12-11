@@ -5,8 +5,11 @@
 	"compatibility": {
 		"minimum": "10"
 	},
-	"scripts": [
-		"scripts/sfi.js"
+	"esmodules": [
+		"esmodules/sfi.js"
+	],
+	"styles": [
+		"styles/sfi.css"
 	],
 	"socket": true,
 	"id": "speed-factor-initiative",
