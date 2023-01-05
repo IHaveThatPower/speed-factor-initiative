@@ -32,7 +32,7 @@ Hooks.once("init", function() {
 Hooks.once("ready", function() {
 	if (game.combats.active)
 	{
-		console.log("Active combat detected; activating SFI socket");
+		console.log("SFI | Active combat detected; activating SFI socket");
 		game.socket.on(SFI.SOCKET_NAME, SFI.handleUpdate);
 	}
 });
@@ -41,7 +41,7 @@ Hooks.once("ready", function() {
  * When a combat is created, activate our socket!
  */
 Hooks.on("createCombat", () => {
-	console.log("New combat detected; activating SFI socket");
+	console.log("SFI | New combat detected; activating SFI socket");
 	game.socket.on(SFI.SOCKET_NAME, SFI.handleUpdate);
 });
 
@@ -49,7 +49,7 @@ Hooks.on("createCombat", () => {
  * Turn our socket off when combat ends.
  */
 Hooks.on("deleteCombat", () => {
-	console.log("Dectivating SFI socket");
+	console.log("SFI | Dectivating SFI socket");
 	game.socket.off(SFI.SOCKET_NAME);
 });
 

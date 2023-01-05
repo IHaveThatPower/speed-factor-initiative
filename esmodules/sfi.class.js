@@ -180,7 +180,7 @@ export class SFI
 				if (!(affectableTokens.find((token) => token.id == payload.token)))
 					return;
 				
-				console.log("Emitting socket event with payload", payload);
+				console.log("SFI | Emitting socket event with payload", payload);
 				game.socket.emit(SFI.SOCKET_NAME, payload);
 			}
 		}
@@ -330,7 +330,7 @@ export class SFI
 		for (let c of combatants)
 		{
 			// Only truly dead combatants are ignored
-			const isDead = c.token?.actorData?.effects?.find((e) => e.label == 'Dead');
+			const isDead = SFI.isDead(c.token)
 			if (!isDead && (c.initiative == null || typeof c.initiative == 'undefined'))
 			{
 				allRolled = false;
@@ -411,7 +411,7 @@ export class SFI
 	 */
 	static async handleCombatEvent(eventType, combat, round, time)
 	{
-		console.log("event type", eventType, "combat", combat, "round", round, "time", time);
+		console.log("SFI | event type", eventType, "combat", combat, "round", round, "time", time);
 		// At the top of a new round, clear all initiative rolls
 		if (eventType == "round")
 		{
@@ -455,9 +455,10 @@ export class SFI
 		}
 		for (let combatant of combat.combatants)
 		{
-			if (!combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_ACTION_CHOSEN) && !(combatant.token?.actorData?.effects?.find((e) => e.label == 'Dead')))
+			const isDead = SFI.isDead(combatant.token);
+			if (!(isDead) && !combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_ACTION_CHOSEN))
 			{
-				if (combatant.isNPC == false || game.user.isGM)
+				if (combatant.isNPC == false || game.user.isGM) // TODO: Should check player-is-owner, not isNPC; wrap into function
 				{
 					ui.notifications.warn(`Combatant ${combatant.name} must choose an action!`);
 				}
@@ -491,9 +492,10 @@ export class SFI
 		}
 		for (let combatant of combat.combatants)
 		{
-			if ((typeof combatant.initiative == 'undefined' || combatant.initiative == null) && !(combatant.token?.actorData?.effects?.find((e) => e.label == 'Dead')))
+			const isDead = SFI.isDead(combatant.token);
+			if (!(isDead) && (typeof combatant.initiative == 'undefined' || combatant.initiative == null))
 			{
-				if (combatant.isNPC == false || game.user.isGM)
+				if (combatant.isNPC == false || game.user.isGM) // TODO: Should check player-is-owner, not isNPC; wrap into function
 				{
 					ui.notifications.warn(`Combatant ${combatant.name} must roll initiative!`);
 				}
@@ -530,15 +532,26 @@ export class SFI
 			update._id = undefined;
 			args.diff = false;
 			args.render = false;
-			console.log("Combatant:", combatant);
-			console.log("Update:", update);
-			console.log("Args:", args);
-			console.log("userID:", userId);
+			console.log("SFI | Combatant:", combatant);
+			console.log("SFI | Update:", update);
+			console.log("SFI | Args:", args);
+			console.log("SFI | userID:", userId);
 			console.trace();
 			ui.notifications.error("You cannot affect initiative manually");
 			return false;
 		}
 		return true;
+	}
+	
+	/**
+	 * Determine if the indicated token is dead
+	 * 
+	 * @param	{Token}
+	 * @return	{bool}
+	 */
+	static isDead(token)
+	{
+		return token?.actorData?.effects?.find((e) => e.label == 'Dead');
 	}
 	
 	/**
@@ -668,6 +681,7 @@ export class SFI
 	{
 		// First, clean up "+ -" instances in the base result
 		baseResult = baseResult.replaceAll('+ -', '- ');
+		// console.log("SFI | Base Result: " + baseResult);
 
 		// Add size mod
 		const sizeMod = SFI.sizeModifiers[combatant.actor.system.traits.size];
@@ -675,9 +689,14 @@ export class SFI
 			baseResult = `${baseResult} + ${sizeMod}`;
 		else
 			baseResult = `${baseResult} - ${Math.abs(sizeMod)}`;
+		// console.log(`SFI | Base Result + Size: ${baseResult}`);
 
 		// Add action mod
-		const actionMod = SFI.actionModifiers[combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_ACTION_CHOSEN)]?.mod;
+		let actionMod;
+		if (SFI.isDead(combatant.token))
+			actionMod = SFI.actionModifiers.find((a) => a.name == 'Incapacitated')?.mod;
+		else
+			actionMod = SFI.actionModifiers[combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_ACTION_CHOSEN)]?.mod;
 		if (actionMod == null || typeof actionMod == 'undefined')
 		{
 			const msg = `Cannot roll initiative without action chosen for ${combatant.name}`;
@@ -688,12 +707,14 @@ export class SFI
 			baseResult = `${baseResult} + ${actionMod}`;
 		else
 			baseResult = `${baseResult} - ${Math.abs(actionMod)}`;
+		// console.log(`SFI | Base Result + Size + Action: ${baseResult}`);
 	
 		// If an explicit result was provided, use it instead of rolling
 		const explicitRoll = combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_ROLL_RESULT);
 		if (explicitRoll)
 		{
 			baseResult = baseResult.replace(/(1d20|2d20k.)/, explicitRoll);
+			// console.log(`SFI | Roll With Explicit Result: ${baseResult}`);
 		}
 		return baseResult;
 	}
@@ -722,6 +743,13 @@ export const SFIPatchActor5e = (ActorDocumentClass) => {
 			const init = this.system.attributes.init ??= {};
 			const sizeMod = SFI.sizeModifiers[this.system.traits.size];
 			init.total += sizeMod;
+		}
+
+		async rollInitiative({createCombatants, rerollInitiative, initiativeOptions})
+		{
+			let baseResult = await super.rollInitiative({createCombatants, rerollInitiative, initiativeOptions});
+			console.log(`SFI | Base Result for rollInitiative on ${this.actor.name}: `, baseResult);
+			return baseResult;
 		}
 	}
 
@@ -785,16 +813,24 @@ export const SFIPatchCombatTracker = (html) => {
 };
 
 export const SFIPatchInitiativeFormula = (Combatant) => {
-	console.log("Patching Combatant initiative formula");
+	console.log("SFI | Patching Combatant initiative formula");
 	function _getInitiativeFormula()
 	{
-		let baseResult = this._getInitiativeFormulaBase();
+		const baseResult = this._getInitiativeFormulaBase();
 		return SFI.modifyBaseInitiative(this, baseResult);
 	}
-
-	// Save original
 	Combatant.prototype._getInitiativeFormulaBase = Combatant.prototype._getInitiativeFormula;
-	// Set new
 	Combatant.prototype._getInitiativeFormula = _getInitiativeFormula;
+
+	function getInitiativeRoll(formula)
+	{
+		// Ensure the formula is what we expect it to be; get outta here DAE
+		formula = SFI.modifyBaseInitiative(this, this._getInitiativeFormulaBase());
+		const baseResult = this.getInitiativeRollBase(formula);
+		return baseResult;
+	}
+	Combatant.prototype.getInitiativeRollBase = Combatant.prototype.getInitiativeRoll;
+	Combatant.prototype.getInitiativeRoll = getInitiativeRoll;
+
 	return Combatant;
 };
