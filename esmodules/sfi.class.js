@@ -4,10 +4,17 @@ export class SFI
 {
 	static MODULE_NAME = 'speed-factor-initiative';
 	static SOCKET_NAME = 'module.speed-factor-initiative';
+
 	static FLAG_ACTION_CHOSEN = 'action-chosen';
+	static FLAG_ACTION_TARGET = 'action-target';
 	static FLAG_LAST_ACTION = 'last-action';
+
+	static FLAG_BONUS_ACTION_CHOSEN = 'bonus-action-chosen';
+	static FLAG_BONUS_ACTION_TARGET = 'bonus-action-target';
+	static FLAG_LAST_BONUS_ACTION = 'last-bonus-action';
+
 	static FLAG_ROLL_RESULT = 'roll-result';
-	
+
 	static actionModifiers = [
 		{
 			"name": "Attack/Cantrip",
@@ -129,6 +136,11 @@ export class SFI
 			"nameFull": "Spellcasting, 9th level",
 			"mod": -9
 		},
+		{
+			"name": "None",
+			"nameFull": "No action",
+			"mod": 0
+		}
 	];
 
 	static sizeModifiers = {
@@ -142,7 +154,7 @@ export class SFI
 
 	/**
 	 * Execute socket calls or respond to them
-	 * 
+	 *
 	 * @param	string settingName
 	 * @param	object settingPayload
 	 * @param	bool [optional] reRenderUI
@@ -158,7 +170,7 @@ export class SFI
 		{
 			SFI.chooseRoundAction();
 		}
-		else if (payload.token && payload.actionChosen)
+		else if (payload.token && payload.actionChosen && payload.bonusActionChosen)
 		{
 			if (isUpdateGM)
 			{
@@ -170,6 +182,11 @@ export class SFI
 					return;
 				}
 				await combatant.setFlag(SFI.MODULE_NAME, SFI.FLAG_ACTION_CHOSEN, payload.actionChosen);
+				await combatant.setFlag(SFI.MODULE_NAME, SFI.FLAG_BONUS_ACTION_CHOSEN, payload.bonusActionChosen);
+				if (payload.actionTarget)
+					await combatant.setFlag(SFI.MODULE_NAME, SFI.FLAG_ACTION_TARGET, payload.actionTarget);
+				if (payload.bonusActionTarget)
+					await combatant.setFlag(SFI.MODULE_NAME, SFI.FLAG_BONUS_ACTION_TARGET, payload.bonusActionTarget);
 				if (payload.explicitRoll)
 					await combatant.setFlag(SFI.MODULE_NAME, SFI.FLAG_ROLL_RESULT, payload.explicitRoll);
 			}
@@ -179,7 +196,7 @@ export class SFI
 				const affectableTokens = SFI.getLegalTokens();
 				if (!(affectableTokens.find((token) => token.id == payload.token)))
 					return;
-				
+
 				console.log("SFI | Emitting socket event with payload", payload);
 				game.socket.emit(SFI.SOCKET_NAME, payload);
 			}
@@ -206,7 +223,7 @@ export class SFI
 		const affectTokens = SFI.getTokenListForDialog(combatantId);
 		if (!affectTokens)
 			return false;
-		
+
 		(async function(affectTokens)
 		{
 			const sortedActionModifiers = SFI.getSortedActionModifiers();
@@ -217,17 +234,21 @@ export class SFI
 					ui.notifications.warn("Only the GM can modify actions once initiative has been rolled for the round");
 					continue;
 				}
-				const dialogContent = await renderTemplate(
-					"modules/speed-factor-initiative/templates/initiative.html",
-					{
+				const dialogData = {
 						'actions': sortedActionModifiers,
 						'action-width': sortedActionModifiers.reduce((a, b) => {
 															return a.action.nameFull.replace('&mdash;', 'm').length > b.action.nameFull.replace('&mdash;', 'm').length ? a : b;
 														}).action.nameFull.replace('&mdash;', 'm').length,
 						'init-mod-size': SFI.sizeModifiers[affectTokens[i].actor.system.traits.size],
 						'init-mod-dex': affectTokens[i].actor.system.abilities.dex.mod,
-						'last-action': affectTokens[i].combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_ACTION_CHOSEN) ?? affectTokens[i].combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_LAST_ACTION)
-					}
+						'action-target': affectTokens[i].combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_ACTION_TARGET),
+						'bonus-action-target': affectTokens[i].combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_BONUS_ACTION_TARGET),
+						'last-action': affectTokens[i].combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_ACTION_CHOSEN) ?? affectTokens[i].combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_LAST_ACTION),
+						'last-bonus-action': affectTokens[i].combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_BONUS_ACTION_CHOSEN) ?? affectTokens[i].combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_LAST_BONUS_ACTION)
+				};
+				const dialogContent = await renderTemplate(
+					"modules/speed-factor-initiative/templates/initiative.html",
+					dialogData
 				);
 				const name = affectTokens[i].name;
 				new Dialog({
@@ -251,11 +272,11 @@ export class SFI
 		})(affectTokens);
 		return true;
 	}
-	
+
 	/**
 	 * Determine what set of tokens should be operated on for
 	 * chooseRoundAction()
-	 * 
+	 *
 	 * @param {string} combatantId	Optional specific combatant
 	 * @return {mixed}	Array of tokens on success, false on error
 	 */
@@ -288,7 +309,7 @@ export class SFI
 			// Failing that, go to all owned tokens --- TODO: Maybe?
 			if (affectTokens.length == 0 && game.user.isGM)
 				affectTokens = activeCombatants.filter(ac => ownedTokens.find((ot) => ot.id == ac.token.id))?.map(ac => ac.token);
-				
+
 			// If we get here, something went screwy; let the user know
 			if (affectTokens.length == 0)
 			{
@@ -301,7 +322,7 @@ export class SFI
 
 	/**
 	 * Determine what tokens the current user can legally affect
-	 * 
+	 *
 	 * @return	{array}
 	 */
 	static getLegalTokens()
@@ -314,9 +335,9 @@ export class SFI
 	}
 
 	/**
-	 * Determine if the token's in a state where it's legal for it to 
+	 * Determine if the token's in a state where it's legal for it to
 	 * choose its next action
-	 * 
+	 *
 	 * @param	{Token} token
 	 * @return	bool
 	 */
@@ -342,7 +363,7 @@ export class SFI
 
 	/**
 	 * Sort the action modifiers while preserving their keys
-	 * 
+	 *
 	 * @return {array}
 	 */
 	static getSortedActionModifiers()
@@ -353,11 +374,25 @@ export class SFI
 			sortedActionModifiers.push({'index': a, 'action': SFI.actionModifiers[a]});
 		}
 		sortedActionModifiers.sort((a, b) => {
+			// "None" goes to the top
+			const aIsNone = a.action.name.startsWith('None');
+			const bIsNone = b.action.name.startsWith('None');
+			if (aIsNone && !(bIsNone))
+				return -1;
+			if (bIsNone && !(aIsNone))
+				return 1;
+			// Incapacitated goes to the bottom
+			const aIsIncap = a.action.name.startsWith('Incapacitated');
+			const bIsIncap = b.action.name.startsWith('Incapacitated');
+			if (aIsIncap && !(bIsIncap))
+				return -1;
+			if (bIsIncap && !(aIsIncap))
+				return 1;
+			// Spellcasting always sorts to the end
 			const aIsSpell = a.action.name.startsWith('Spellcasting');
 			const bIsSpell = b.action.name.startsWith('Spellcasting');
-			// Spellcasting always sorts to the end
 			if (aIsSpell && !(bIsSpell))
-				return 1; 
+				return 1;
 			if (bIsSpell && !(aIsSpell))
 				return -1;
 			if (a.action.mod > b.action.mod)
@@ -371,7 +406,7 @@ export class SFI
 
 	/**
 	 * Invoked by the Choose Round Action dialog when an action is chosen
-	 * 
+	 *
 	 * @param	token
 	 * @param	html
 	 * @return	void
@@ -379,7 +414,7 @@ export class SFI
 	static async setAction(token, html)
 	{
 		const formData = (new FormDataExtended(html[0].querySelector('form.speedFactorInitiative'))).object;
-		if (!(formData['init-mod-action'] in SFI.actionModifiers))
+		if (!(formData['init-mod-action'] in SFI.actionModifiers) || !(formData['init-mod-bonus-action'] in SFI.actionModifiers))
 		{
 			ui.notifications.error("Invalid action selection");
 			SFI.chooseRoundAction(token.combatant.id);
@@ -394,7 +429,9 @@ export class SFI
 		const payload = {
 			token: token.id,
 			actionChosen: formData['init-mod-action'],
-			// actionSpeed: SFI.actionModifiers[formData['init-mod-action']].mod,
+			actionTarget: formData['action-target'],
+			bonusActionChosen: formData['init-mod-bonus-action'],
+			bonusActionTarget: formData['bonus-action-target'],
 			explicitRoll: formData['init-roll']
 		};
 		SFI.handleUpdate(payload);
@@ -421,7 +458,9 @@ export class SFI
 				if (combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_ACTION_CHOSEN))
 				{
 					await combatant.setFlag(SFI.MODULE_NAME, SFI.FLAG_LAST_ACTION, combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_ACTION_CHOSEN));
+					await combatant.setFlag(SFI.MODULE_NAME, SFI.FLAG_LAST_BONUS_ACTION, combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_BONUS_ACTION_CHOSEN));
 					await combatant.unsetFlag(SFI.MODULE_NAME, SFI.FLAG_ACTION_CHOSEN);
+					await combatant.unsetFlag(SFI.MODULE_NAME, SFI.FLAG_BONUS_ACTION_CHOSEN);
 				}
 			}
 		}
@@ -441,7 +480,7 @@ export class SFI
 	}
 
 	/**
-	 * When a turn is advanced, check to ensure all combatants have a 
+	 * When a turn is advanced, check to ensure all combatants have a
 	 * chosen action and abort advancement if not.
 	 *
 	 * @return	{bool}
@@ -456,15 +495,15 @@ export class SFI
 		for (let combatant of combat.combatants)
 		{
 			const isDead = SFI.isDead(combatant.token);
-			if (!(isDead) && !combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_ACTION_CHOSEN))
+			if (!(isDead) && (!combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_ACTION_CHOSEN) || !combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_BONUS_ACTION_CHOSEN)))
 			{
 				if (combatant.isNPC == false || game.user.isGM) // TODO: Should check player-is-owner, not isNPC; wrap into function
 				{
-					ui.notifications.warn(`Combatant ${combatant.name} must choose an action!`);
+					ui.notifications.warn(`Combatant ${combatant.name} must choose actions!!`);
 				}
 				else
 				{
-					ui.notifications.warn("A combatant still needs to choose an action!");
+					ui.notifications.warn("A combatant still needs to choose actions!");
 				}
 				if (game.user.isGM)
 				{
@@ -516,7 +555,7 @@ export class SFI
 
 	/**
 	 * Check that an imminent updateCombatant call can be made
-	 * 
+	 *
 	 * @param {object} combatant
 	 * @param {object} update
 	 * @params {object} args
@@ -542,10 +581,10 @@ export class SFI
 		}
 		return true;
 	}
-	
+
 	/**
 	 * Determine if the indicated token is dead
-	 * 
+	 *
 	 * @param	{Token}
 	 * @return	{bool}
 	 */
@@ -553,7 +592,7 @@ export class SFI
 	{
 		return token?.actorData?.effects?.find((e) => e.label == 'Dead');
 	}
-	
+
 	/**
 	 * The remaining static methods are used by patch functions
 	 */
@@ -561,7 +600,7 @@ export class SFI
 	/**
 	 * Logic for prepareInitiativeAttribution, which is called by an
 	 * extension of the behavior of ActorSheet._onPropertyAttribution
-	 * 
+	 *
 	 * @param {object} rollData
 	 * @return {array}
 	 */
@@ -614,10 +653,10 @@ export class SFI
 		}
 		return attribution;
 	}
-	
+
 	/**
 	 * Modify the combat tracker to support additional behavior
-	 * 
+	 *
 	 * @param	{} html
 	 * @return	void
 	 */
@@ -636,43 +675,89 @@ export class SFI
 				SFI.chooseRoundAction(this.closest('.combatant')?.dataset?.combatantId);
 			}, true);
 		}
-		
+
 		// Add the action display
 		const combatantItems = html[0].querySelectorAll('li.combatant');
+		const getActionData = function(combatant, flag) {
+			const actionData = {};
+			actionData.idx = combatant.getFlag(SFI.MODULE_NAME, flag);
+			actionData.ready = false;
+			if (actionData.idx)
+			{
+				actionData.name = SFI.actionModifiers[actionData.idx].name;
+				if (flag == SFI.FLAG_ACTION_CHOSEN)
+					actionData.target = combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_ACTION_TARGET) ?? '';
+				else if (flag == SFI.FLAG_BONUS_ACTION_CHOSEN)
+					actionData.target = combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_BONUS_ACTION_TARGET) ?? '';
+				actionData.ready = true;
+			}
+			/*
+			else
+				actionData.name = "choose actions";
+			*/
+			return actionData;
+		};
 		for (let c of combatantItems)
 		{
 			// Get needed combatant information
 			const combatantId = c.dataset.combatantId;
 			const combatant = game.combats.active.combatants.get(combatantId);
-			const actionData = {};
-			actionData.idx = combatant.getFlag(SFI.MODULE_NAME, 'action-chosen');
-			actionData.ready = false;
-			if (actionData.idx)
-			{
-				if (combatant.players.length || combatant.hasPlayerOwner || game.user.isGM)
-					actionData.name = SFI.actionModifiers[actionData.idx].name;
-				else
-					actionData.name = "action selected";
-				actionData.ready = true;
-			}
-			else
-				actionData.name = "choose action";
-			
+
+			const actionData = getActionData(combatant, SFI.FLAG_ACTION_CHOSEN);
+			const bonusActionData = getActionData(combatant, SFI.FLAG_BONUS_ACTION_CHOSEN);
+
 			const nameElement = c.querySelector('h4');
 			const actionRow = document.createElement('div');
 			actionRow.classList.add('sfi-action-row');
-			if (actionData.ready)
+			let displayString = 'choose actions';
+			let titleString = 'Actions have not yet been chosen';
+			if (actionData.ready && bonusActionData.ready)
+			{
 				actionRow.classList.add('sfi-action-chosen');
-			actionRow.innerHTML = actionData.name;
+				if (combatant.players.length || combatant.hasPlayerOwner || game.user.isGM)
+				{
+					if (actionData.name == 'None' && bonusActionData.name == 'None')
+					{
+						displayString = 'Not taking actions';
+						titleString = displayString;
+					}
+					else
+					{
+						displayString = '';
+						titleString = '';
+						if (!(actionData.name == 'None'))
+						{
+							displayString = actionData.name;
+							titleString = `Action: ${actionData.name}` + (actionData.target.trim().length > 0 ? ` -> ${actionData.target}` : '');
+						}
+						if (!(bonusActionData.name == 'None'))
+						{
+							if (displayString.length)
+								displayString += ', ';
+							if (titleString.length)
+								titleString += ', ';
+							displayString += bonusActionData.name;
+							titleString += `Bonus Action: ${bonusActionData.name}` + (bonusActionData.target.trim().length > 0  ? ` -> ${bonusActionData.target}` : '');
+						}
+					}
+				}
+				else
+				{
+					displayString = 'actions selected';
+					titleString = "Actions have been selected";
+				}
+			}
+			actionRow.innerHTML = displayString;
+			actionRow.setAttribute('title', titleString);
 			// nameElement.parentNode.insertBefore(actionRow, nameElement.nextSibling);
 			nameElement.appendChild(actionRow);
 		}
 	}
-	
+
 	/**
-	 * Given a roll string from Combatant._getInitiativeFormulaBase(), 
+	 * Given a roll string from Combatant._getInitiativeFormulaBase(),
 	 * modify it with the extra parameters we want to support
-	 * 
+	 *
 	 * @param	{Combatant} combatant
 	 * @param {string} baseResult
 	 * @return {string}
@@ -696,7 +781,21 @@ export class SFI
 		if (SFI.isDead(combatant.token))
 			actionMod = SFI.actionModifiers.find((a) => a.name == 'Incapacitated')?.mod;
 		else
-			actionMod = SFI.actionModifiers[combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_ACTION_CHOSEN)]?.mod;
+		{
+			const action = SFI.actionModifiers[combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_ACTION_CHOSEN)];
+			const bonusAction = SFI.actionModifiers[combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_BONUS_ACTION_CHOSEN)];
+			if (action && bonusAction)
+			{
+				if (action?.name?.startsWith("None") && bonusAction?.name?.startsWith("None"))
+					actionMod = 0;
+				else if (action?.name?.startsWith("None") && !bonusAction?.name?.startsWith("None"))
+					actionMod = bonusAction.mod;
+				else if (!action?.name?.startsWith("None") && bonusAction?.name?.startsWith("None"))
+					actionMod = action.mod;
+				else
+					actionMod = Math.min(action.mod, bonusAction.mod);
+			}
+		}
 		if (actionMod == null || typeof actionMod == 'undefined')
 		{
 			const msg = `Cannot roll initiative without action chosen for ${combatant.name}`;
@@ -708,7 +807,7 @@ export class SFI
 		else
 			baseResult = `${baseResult} - ${Math.abs(actionMod)}`;
 		// console.log(`SFI | Base Result + Size + Action: ${baseResult}`);
-	
+
 		// If an explicit result was provided, use it instead of rolling
 		const explicitRoll = combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_ROLL_RESULT);
 		if (explicitRoll)
@@ -738,7 +837,7 @@ export const SFIPatchActor5e = (ActorDocumentClass) => {
 		{
 			// Do the normal prepare first
 			super._prepareInitiative(bonusData, globalCheckBonus);
-			
+
 			// Now modify the total based on size
 			const init = this.system.attributes.init ??= {};
 			const sizeMod = SFI.sizeModifiers[this.system.traits.size];
@@ -794,7 +893,7 @@ export const SFIPatchAddInitiativeListeners = (sheet, html) => {
 	initEl.dataset.property = 'attributes.init';
 	initEl.classList.add('attributable');
 	initEl.addEventListener('mouseover', sheet._onPropertyAttribution.bind(sheet));
-	
+
 	// Patch the Initiative header
 	const initHeader = html[0].querySelector('.attribute.initiative .rollable');
 	let newHeader = initHeader.cloneNode(true);
