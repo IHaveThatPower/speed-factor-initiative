@@ -755,26 +755,23 @@ export class SFI
 	}
 
 	/**
-	 * Given a roll string from Combatant._getInitiativeFormulaBase(),
+	 * Given a roll object from Combatant.getInitiativeRoll,
 	 * modify it with the extra parameters we want to support
 	 *
 	 * @param	{Combatant} combatant
-	 * @param {string} baseResult
+	 * @param	{D20Roll} roll
 	 * @return {string}
 	 */
-	static modifyBaseInitiative(combatant, baseResult)
+	static modifyBaseInitiative(combatant, roll)
 	{
-		// First, clean up "+ -" instances in the base result
-		baseResult = baseResult.replaceAll('+ -', '- ');
-		// console.log("SFI | Base Result: " + baseResult);
+		//console.log("SFI | Roll", roll);
+		let formula = roll._formula;
 
 		// Add size mod
 		const sizeMod = SFI.sizeModifiers[combatant.actor.system.traits.size];
-		if (sizeMod >= 0)
-			baseResult = `${baseResult} + ${sizeMod}`;
-		else
-			baseResult = `${baseResult} - ${Math.abs(sizeMod)}`;
-		// console.log(`SFI | Base Result + Size: ${baseResult}`);
+		roll.terms.push(new OperatorTerm({operator: "+"}));
+		roll.terms.push(new NumericTerm({number: sizeMod}));
+		formula = `${formula} + ${sizeMod}`;
 
 		// Add action mod
 		let actionMod;
@@ -802,20 +799,24 @@ export class SFI
 			ui.notifications.error(msg);
 			throw new Error(msg); // To actually prevent it
 		}
-		if (actionMod >= 0)
-			baseResult = `${baseResult} + ${actionMod}`;
-		else
-			baseResult = `${baseResult} - ${Math.abs(actionMod)}`;
-		// console.log(`SFI | Base Result + Size + Action: ${baseResult}`);
+		roll.terms.push(new OperatorTerm({operator: "+"}));
+		roll.terms.push(new NumericTerm({number: actionMod}));
+		formula = `${formula} + ${actionMod}`;
 
 		// If an explicit result was provided, use it instead of rolling
 		const explicitRoll = combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_ROLL_RESULT);
 		if (explicitRoll)
 		{
-			baseResult = baseResult.replace(/(1d20|2d20k.)/, explicitRoll);
-			// console.log(`SFI | Roll With Explicit Result: ${baseResult}`);
+			roll.terms[0].results = [{active: true, result: Number(explicitRoll)}];
+			roll.terms[0]._evaluated = true;
+			formula = formula.replace(/(1d20|2d20k.)/, explicitRoll);
 		}
-		return baseResult;
+
+		// Clean up "+ -" instances and update the formula
+		formula = formula.replaceAll('+ -', '- ');
+		roll._formula = formula;
+
+		return roll;
 	}
 }
 
@@ -913,20 +914,13 @@ export const SFIPatchCombatTracker = (html) => {
 
 export const SFIPatchInitiativeFormula = (Combatant) => {
 	console.log("SFI | Patching Combatant initiative formula");
-	function _getInitiativeFormula()
+	function getInitiativeRoll(options={})
 	{
-		const baseResult = this._getInitiativeFormulaBase();
-		return SFI.modifyBaseInitiative(this, baseResult);
-	}
-	Combatant.prototype._getInitiativeFormulaBase = Combatant.prototype._getInitiativeFormula;
-	Combatant.prototype._getInitiativeFormula = _getInitiativeFormula;
-
-	function getInitiativeRoll(formula)
-	{
-		// Ensure the formula is what we expect it to be; get outta here DAE
-		formula = SFI.modifyBaseInitiative(this, this._getInitiativeFormulaBase());
-		const baseResult = this.getInitiativeRollBase(formula);
-		return baseResult;
+		const baseRoll = this.getInitiativeRollBase(options);
+		//console.log("SFI | System Roll", baseRoll);
+		const modifiedResult = SFI.modifyBaseInitiative(this, baseRoll);
+		// console.log("SFI | Modified Roll", modifiedResult);
+		return modifiedResult;
 	}
 	Combatant.prototype.getInitiativeRollBase = Combatant.prototype.getInitiativeRoll;
 	Combatant.prototype.getInitiativeRoll = getInitiativeRoll;
