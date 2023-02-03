@@ -1,7 +1,7 @@
 {
 	"title": "Speed Factor Initiative",
 	"description": "Implements Speed Factor Initiative for D&D 5e.",
-	"version": "0.0.1",
+	"version": "0.5.0",
 	"compatibility": {
 		"minimum": "10"
 	},
@@ -18,5 +18,16 @@
 			"name": "IHaveThatPower",
 			"flags": {}
 		}
-	]
+	],
+	"relationships": {
+		"requires": [
+			{
+				"id": "lib-wrapper",
+				"type": "module",
+				"compatibility": {
+					"verified": "1.12.12.0"
+				}
+			}
+		]
+	}
 }

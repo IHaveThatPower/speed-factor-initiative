@@ -22,7 +22,18 @@ Handlebars.registerHelper('numEq', function (a, b)
  */
 Hooks.once("init", function() {
 	CONFIG.Actor.documentClass = SFIPatchActor5e(CONFIG.Actor.documentClass);
+	// CONFIG.Combat = SFIPatchCombat(CONFIG.Combat);
 	Combatant = SFIPatchInitiativeFormula(Combatant);
+	libWrapper.register(SFI.MODULE_NAME, 'Combat.prototype.rollAll', function(wrapped, ...args) {
+		const result = wrapped(...args);
+		SFI.rollInitiativeCallback();
+		return result;
+	}, 'WRAPPER');
+	libWrapper.register(SFI.MODULE_NAME, 'Combat.prototype.rollNPC', function(wrapped, ...args) {
+		const result = wrapper(...args);
+		SFI.rollInitiativeCallback();
+		return result;
+	}, 'WRAPPER');
 });
 
 /**
@@ -30,6 +41,10 @@ Hooks.once("init", function() {
  * turn on our socket.
  */
 Hooks.once("ready", function() {
+	if (!game.modules.get('lib-wrapper')?.active && game.user.isGM)
+	{
+		ui.notifications.error("Module SFI requires the 'libWrapper' module. Please install and activate it.");
+	}
 	if (game.combats.active)
 	{
 		console.log("SFI | Active combat detected; activating SFI socket");

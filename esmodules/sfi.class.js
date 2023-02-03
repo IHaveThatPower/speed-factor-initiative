@@ -19,125 +19,148 @@ export class SFI
 		{
 			"name": "Attack/Cantrip",
 			"nameFull": "Attack &mdash; General, Cantrip",
+			"nameShort": "Atk/Ctrp",
 			"tooltip": "A weapon attack or Cantrip",
 			"mod": +0
 		},
 		{
 			"name": "Dash/Help/Hide",
+			"nameShort": "Dash/Help/Hide",
 			"nameFull": "Dash, Help, Hide",
 			"mod": +0
 		},
 		{
 			"name": "Medium Action",
 			"nameFull": "Medium Action",
+			"nameShort": "Med.",
 			"tooltip": "An action comparable to Attack, Dash, Help, or Hide",
 			"mod": +0
 		},
 		{
 			"name": "Attack, Light/Finesse/Unarmed",
 			"nameFull": "Attack &mdash; Light/Finesse/Unarmed",
+			"nameShort": "Atk Lt/Fin/Un",
 			"tooltip": "Attacking with a weapon that has the 'light' or 'finesse' properties, or an unarmed attack",
 			"mod": +2
 		},
 		{
 			"name": "Fast Action",
+			"nameShort": "Fast",
 			"nameFull": "Fast Action",
 			"mod": +2
 		},
 		{
 			"name": "Very Fast Action",
+			"nameShort": "V.Fast",
 			"nameFull": "Very Fast Action",
 			"tooltip": "Something done almost reflexively (e.g. Dodge)",
 			"mod": +5
 		},
 		{
 			"name": "Dodge",
+			"nameShort": "Dodge",
 			"nameFull": "Dodge",
 			"mod": +5
 		},
 		{
 			"name": "Melee, Heavy Weapon",
+			"nameShort": "Melee Hvy",
 			"nameFull": "Attack &mdash; Melee, Heavy Weapon",
 			"tooltip": "Melee attack with a weapon that has the 'heavy' property",
 			"mod": -2
 		},
 		{
 			"name": "Slow Action",
+			"nameShort": "Slow",
 			"nameFull": "Slow Action",
 			"tooltip": "Something that requires some precision to complete (e.g. retrieving an accessible item)",
 			"mod": -2
 		},
 		{
 			"name": "Melee, Two-Handed Weapon",
+			"nameShort": "Melee 2H",
 			"nameFull": "Attack &mdash; Melee, Two-Handed Weapon",
 			"tooltip": "Melee attack with a weapon that has the 'two-handed' property",
 			"mod": -5
 		},
 		{
 			"name": "Ranged, Loading Weapon",
+			"nameShort": "Ranged (Ldng)",
 			"nameFull": "Attack &mdash; Ranged, Loading Weapon",
 			"tooltip": "Ranged attack with a weapon that has the 'loading' property (e.g. crossbow)",
 			"mod": -5
 		},
 		{
 			"name": "Very Slow Action",
+			"nameShort": "VSlow",
 			"nameFull": "Very Slow/Complex Action",
 			"tooltip": "Something that requires the whole round to complete (e.g. retrieving a stowed item)",
 			"mod": -5
 		},
 		{
 			"name": "Incapacitated",
+			"nameShort": "Incap",
 			"nameFull": "Incapacitated",
 			"tooltip": "Incapacitated, stunned, etc.",
 			"mod": -5
 		},
 		{
 			"name": "Spellcasting, 1st level",
+			"nameShort": "Spell 1st-Lvl",
 			"nameFull": "Spellcasting, 1st level",
 			"mod": -1
 		},
 		{
 			"name": "Spellcasting, 2nd level",
+			"nameShort": "Spell 2nd-Lvl",
 			"nameFull": "Spellcasting, 2nd level",
 			"mod": -2
 		},
 		{
 			"name": "Spellcasting, 3rd level",
+			"nameShort": "Spell 3rd-Lvl",
 			"nameFull": "Spellcasting, 3rd level",
 			"mod": -3
 		},
 		{
 			"name": "Spellcasting, 4th level",
+			"nameShort": "Spell 4th-Lvl",
 			"nameFull": "Spellcasting, 4th level",
 			"mod": -4
 		},
 		{
 			"name": "Spellcasting, 5th level",
+			"nameShort": "Spell 5th-Lvl",
 			"nameFull": "Spellcasting, 5th level",
 			"mod": -5
 		},
 		{
 			"name": "Spellcasting, 6th level",
+			"nameShort": "Spell 6th-Lvl",
 			"nameFull": "Spellcasting, 6th level",
 			"mod": -6
 		},
 		{
 			"name": "Spellcasting, 7th level",
+			"nameShort": "Spell 7th-Lvl",
 			"nameFull": "Spellcasting, 7th level",
 			"mod": -7
 		},
 		{
 			"name": "Spellcasting, 8th level",
+			"nameShort": "Spell 8th-Lvl",
 			"nameFull": "Spellcasting, 8th level",
 			"mod": -8
 		},
 		{
 			"name": "Spellcasting, 9th level",
+			"nameShort": "Spell 9th-Lvl",
 			"nameFull": "Spellcasting, 9th level",
 			"mod": -9
 		},
 		{
 			"name": "None",
+			"nameShort": "None",
 			"nameFull": "No action",
 			"mod": 0
 		}
@@ -299,16 +322,25 @@ export class SFI
 				return false;
 			}
 		}
+		else if (game?.canvas?.tokens?.controlled?.length > 0)
+		{
+			// Filter the list down to just active combatants
+			const controlledTokens = game.canvas.tokens.controlled;
+			const affectableTokens = SFI.getLegalTokens();
+			affectTokens = activeCombatants.filter(ac =>
+				controlledTokens.find((ct) => ct.id == ac.token.id) &&
+				affectableTokens.find((aft) => aft.id == ac.token.id)
+			)?.map(ac => ac.token);
+			if (affectTokens.length == 0)
+			{
+				ui.notifications.error("None of the tokens selected can be affected. Try deselecting, or selecting different tokens");
+				return false;
+			}
+		}
 		else
 		{
-			const controlledTokens = canvas.tokens.controlled;
 			const ownedTokens = canvas.tokens.ownedTokens;
-			// Start with controlled tokens
-			if (controlledTokens.length > 0)
-				affectTokens = activeCombatants.filter(ac => controlledTokens.find((ct) => ct.id == ac.token.id))?.map(ac => ac.token);
-			// Failing that, go to all owned tokens --- TODO: Maybe?
-			if (affectTokens.length == 0 && game.user.isGM)
-				affectTokens = activeCombatants.filter(ac => ownedTokens.find((ot) => ot.id == ac.token.id))?.map(ac => ac.token);
+			affectTokens = activeCombatants.filter(ac => ownedTokens.find((ot) => ot.id == ac.token.id))?.map(ac => ac.token);
 
 			// If we get here, something went screwy; let the user know
 			if (affectTokens.length == 0)
@@ -571,11 +603,6 @@ export class SFI
 			update._id = undefined;
 			args.diff = false;
 			args.render = false;
-			console.log("SFI | Combatant:", combatant);
-			console.log("SFI | Update:", update);
-			console.log("SFI | Args:", args);
-			console.log("SFI | userID:", userId);
-			console.trace();
 			ui.notifications.error("You cannot affect initiative manually");
 			return false;
 		}
@@ -662,22 +689,7 @@ export class SFI
 	 */
 	static modifyCombatTracker(html)
 	{
-		// Patch the buttons
-		const initButtons = html[0].querySelectorAll('.token-initiative .combatant-control.roll');
-		for (let i of initButtons)
-		{
-			let j = i.cloneNode(true);
-			i.parentNode.replaceChild(j, i);
-			j.dataset.tooltip = "Initiative not yet rolled";
-			j.dataset.control = undefined;
-			j.addEventListener('click', function()
-			{
-				SFI.chooseRoundAction(this.closest('.combatant')?.dataset?.combatantId);
-			}, true);
-		}
-
-		// Add the action display
-		const combatantItems = html[0].querySelectorAll('li.combatant');
+		// Helper to get relevant action data
 		const getActionData = function(combatant, flag) {
 			const actionData = {};
 			actionData.idx = combatant.getFlag(SFI.MODULE_NAME, flag);
@@ -685,10 +697,13 @@ export class SFI
 			if (actionData.idx)
 			{
 				actionData.name = SFI.actionModifiers[actionData.idx].name;
+				actionData.nameShort = SFI.actionModifiers[actionData.idx].nameShort;
 				if (flag == SFI.FLAG_ACTION_CHOSEN)
 					actionData.target = combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_ACTION_TARGET) ?? '';
 				else if (flag == SFI.FLAG_BONUS_ACTION_CHOSEN)
 					actionData.target = combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_BONUS_ACTION_TARGET) ?? '';
+				if (combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_ROLL_RESULT))
+					actionData.roll = combatant.getFlag(SFI.MODULE_NAME, SFI.FLAG_ROLL_RESULT);
 				actionData.ready = true;
 			}
 			/*
@@ -697,6 +712,39 @@ export class SFI
 			*/
 			return actionData;
 		};
+
+		// Patch the roll buttons
+		const initButtons = html[0].querySelectorAll('.token-initiative .combatant-control.roll');
+		for (let i of initButtons)
+		{
+			const j = i.cloneNode(true);
+			i.parentNode.replaceChild(j, i);
+			j.dataset.control = undefined;
+			j.addEventListener('click', function()
+			{
+				SFI.chooseRoundAction(this.closest('.combatant')?.dataset?.combatantId);
+			}, true);
+
+			// Decide tooltip text based on action state
+			const combatantId = j.closest('.combatant')?.dataset?.combatantId;
+			const combatant = game?.combats?.active?.combatants?.get(combatantId);
+			const sfiData = combatant.flags['speed-factor-initiative'];
+			j.dataset.tooltip = "Initiative not yet rolled";
+			if (!!sfiData)
+			{
+				if (!sfiData['action-chosen'] && !sfiData['bonus-action-chosen'])
+				{
+					j.dataset.tooltip = "Actions Not Yet Chosen";
+				}
+				else if (sfiData['roll-result'])
+				{
+					j.dataset.tooltip = "Awaiting DM to resolve Initiative";
+				}
+			}
+		}
+
+		// Add the action display
+		const combatantItems = html[0].querySelectorAll('li.combatant');
 		for (let c of combatantItems)
 		{
 			// Get needed combatant information
@@ -727,17 +775,23 @@ export class SFI
 						titleString = '';
 						if (!(actionData.name == 'None'))
 						{
-							displayString = actionData.name;
-							titleString = `Action: ${actionData.name}` + (actionData.target.trim().length > 0 ? ` -> ${actionData.target}` : '');
+							displayString = actionData.nameShort;
+							titleString = `Act: ${actionData.name}` + (actionData.target.trim().length > 0 ? ` -> ${actionData.target}` : '');
 						}
 						if (!(bonusActionData.name == 'None'))
 						{
 							if (displayString.length)
 								displayString += ', ';
 							if (titleString.length)
-								titleString += ', ';
-							displayString += bonusActionData.name;
-							titleString += `Bonus Action: ${bonusActionData.name}` + (bonusActionData.target.trim().length > 0  ? ` -> ${bonusActionData.target}` : '');
+								titleString += ",\n";
+							displayString += bonusActionData.nameShort;
+							titleString += `BonAct: ${bonusActionData.name}` + (bonusActionData.target.trim().length > 0  ? ` -> ${bonusActionData.target}` : '');
+						}
+						const ownDieRollResult = actionData.roll ?? bonusActionData.roll ?? false;
+						if (ownDieRollResult)
+						{
+							displayString = `[R] ${displayString}`;
+							titleString += `\n[Die Roll: ${ownDieRollResult}]`;
 						}
 					}
 				}
@@ -818,6 +872,51 @@ export class SFI
 
 		return roll;
 	}
+
+	/**
+	 * Upon rolling initiative for all (or NPCs), set the turn order
+	 * tracker to the first turn and address any linked initiatives.
+	 *
+	 * @return	void
+	 */
+	static async rollInitiativeCallback()
+	{
+		if (!game.user.isGM)
+			return;
+		if (!game.combats.active)
+			return;
+
+		await (async function() {
+			const poll = resolve => {
+				if (game.combats.active.combatants.filter(c => (typeof c.initiative == "undefined" || c.initiative == null)).length == 0)
+				{
+					resolve();
+				}
+				else setTimeout(_ => poll(resolve), 100);
+			}
+			return new Promise(poll);
+		})();
+		game.combats.active.update({'turn': 0});
+
+		// Scan combatants for followers
+		for (let combatant of game.combats.active.combatants)
+		{
+			const followedName = combatant?.token?.actor?.flags['speed-factor-initiative']?.follow;
+			if (!followedName)
+			{
+				continue;
+			}
+			const followed = game.combats.active.combatants.filter(c => c.name == followedName);
+			if (!followed || followed.length == 0)
+			{
+				continue;
+			}
+			if (typeof followed[0].initiative != "undefined")
+			{
+				combatant.update({'initiative': followed[0].initiative});
+			}
+		}
+	}
 }
 
 /**
@@ -848,7 +947,7 @@ export const SFIPatchActor5e = (ActorDocumentClass) => {
 		async rollInitiative({createCombatants, rerollInitiative, initiativeOptions})
 		{
 			let baseResult = await super.rollInitiative({createCombatants, rerollInitiative, initiativeOptions});
-			console.log(`SFI | Base Result for rollInitiative on ${this.actor.name}: `, baseResult);
+			// console.log(`SFI | Base Result for rollInitiative on ${this.actor.name}: `, baseResult);
 			return baseResult;
 		}
 	}

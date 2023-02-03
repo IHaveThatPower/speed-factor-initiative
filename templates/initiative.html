@@ -76,4 +76,12 @@ $(document).ready(function()
 		<input type="text" name="init-roll" id="init-roll" inputmode="numeric" pattern="\d+" />
 		<div class="helperText">If you are rolling physical dice for your initiative, fill in the unmodified roll result here. Otherwise, leave it blank and Foundry will roll it for you when the round starts.</div>
 	</section>
+	<!--
+	<section class="span">
+		<label for="init-couple">Link Initiative:</label>
+		<select name="init-couple" id="init-couple">
+			{{#each coupleOptions as |coupleOption|}}<option value="{{coupleOption.index}}"{{#if (numEq ../last-couple-option coupleOption.index)}} selected{{/if}} title="">NAME</option>{{/each}}
+		</select>
+	</section>
+	-->
 </form>
