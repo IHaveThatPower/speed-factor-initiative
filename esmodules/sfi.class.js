@@ -924,6 +924,7 @@ export class SFI
  */
 
 export const SFIPatchActor5e = (ActorDocumentClass) => {
+	console.log('SFI | Patching Actor');
 	class SFIActor5e extends ActorDocumentClass
 	{
 		/**
@@ -957,54 +958,97 @@ export const SFIPatchActor5e = (ActorDocumentClass) => {
 	return SFIActor5e;
 };
 
-export const SFIPatchActorSheet5e = (ActorSheet) => {
-	ActorSheet._onPropertyAttribution = async function(event)
+export const SFIPatchActorSheet5e = (sheetClasses) => {
+	console.log('SFI | Patching Actor Sheets');
+	// Patch character sheet
+	const characterSheetClass = sheetClasses?.character['dnd5e.ActorSheet5eCharacter']?.cls;
+	if (!characterSheetClass)
 	{
-		// Repeat base logic
-		const existingTooltip = event.currentTarget.querySelector("div.tooltip");
-		const property = event.currentTarget.dataset.property;
-		if (existingTooltip || !property) return;
-		const rollData = this.actor.getRollData({ deterministic: true });
-		let attributions;
-		switch (property)
+		console.error("SFI | Cannot find the expected 5e Character sheet; enhanced visibility will not be used");
+		return sheetClasses;
+	}
+
+	class SFIActorSheet5eCharacter extends characterSheetClass
+	{
+		get template()
 		{
-			case "attributes.ac":
-				attributions = this._prepareArmorClassAttribution(rollData);
-				break;
-			case "attributes.init":
-				attributions = this._prepareInitiativeAttribution(rollData);
-				break;
+			// if ( !game.user.isGM && this.actor.limited ) return "systems/dnd5e/templates/actors/limited-sheet.hbs";
+			return `systems/dnd5e/templates/actors/${this.actor.type}-sheet.hbs`;
 		}
-		if ( !attributions ) return;
-		const html = await new PropertyAttribution(this.actor, attributions, property).renderTooltip();
-		event?.currentTarget?.insertAdjacentElement("beforeend", html[0]);
+
+		/**
+		 * Essentially duplicates the method defined in dnd5e, but adds
+		 * initiative
+		 *
+		 * TODO: Migrate to libwrapper
+		 *
+		 * @param		event
+		 * @return	void
+		 */
+		async _onPropertyAttribution(event)
+		{
+			// Repeat base logic
+			const element = event.target;
+			let property = element.dataset.attribution;
+			// Skip the deprecation warning, since this is caught up
+			const rollData = this.actor.getRollData({ deterministic: true });
+			const title = game.i18n.localize(element.dataset.attributionCaption);
+			let attributions;
+			switch (property)
+			{
+				case "attributes.ac":
+					attributions = this._prepareArmorClassAttribution(rollData);
+					break;
+				case "attributes.init":
+					attributions = this._prepareInitiativeAttribution(rollData);
+					break;
+			}
+			if (!attributions) return;
+			new PropertyAttribution(this.actor, attributions, property, {title}).renderTooltip(element);
+		}
+
+		_prepareInitiativeAttribution(rollData)
+		{
+			return SFI.initiativeAttribution(rollData);
+		}
 	}
 
-	ActorSheet._prepareInitiativeAttribution = function(rollData)
-	{
-		return SFI.initiativeAttribution(rollData);
-	}
+	const constructorName = 'SFIActorSheet5eCharacter';
+	Object.defineProperty(SFIActorSheet5eCharacter.prototype.constructor, 'name', { value: constructorName });
 
-	return ActorSheet;
+	sheetClasses.character['dnd5e.ActorSheet5eCharacter'].cls = SFIActorSheet5eCharacter;
+	return sheetClasses;
 };
 
 export const SFIPatchAddInitiativeListeners = (sheet, html) => {
 	const initEl = html[0].querySelector('.attribute.initiative .attribute-value');
-	initEl.dataset.property = 'attributes.init';
-	initEl.classList.add('attributable');
-	initEl.addEventListener('mouseover', sheet._onPropertyAttribution.bind(sheet));
+	if (!!initEl)
+	{
+		initEl.setAttribute('data-attribution-caption', 'DND5E.Initiative');
+		initEl.setAttribute('data-attribution', 'attributes.init');
+		initEl.setAttribute('data-tooltip-direction', "DOWN");
+		initEl.addEventListener('mouseover', sheet._onPropertyAttribution.bind(sheet));
+	}
+	else
+	{
+		console.log("SFI | Could not find initiative attribute on the sheet");
+	}
+
 
 	// Patch the Initiative header
 	const initHeader = html[0].querySelector('.attribute.initiative .rollable');
-	let newHeader = initHeader.cloneNode(true);
-	initHeader.parentNode.replaceChild(newHeader, initHeader);
-	Object.keys(newHeader.dataset).forEach(dataKey => { delete newHeader.dataset[dataKey]; });
-	newHeader.addEventListener('click', function()
+	if (!!initHeader)
 	{
-		const activeCombatant = game.combats.active.combatants.find((c) => c.actor.id == sheet.actor.id);
-		if (activeCombatant)
-			SFI.chooseRoundAction(activeCombatant.id);
-	}, true);
+		let newHeader = initHeader.cloneNode(true);
+		initHeader.parentNode.replaceChild(newHeader, initHeader);
+		Object.keys(newHeader.dataset).forEach(dataKey => { delete newHeader.dataset[dataKey]; });
+		newHeader.addEventListener('click', function()
+		{
+			const activeCombatant = game.combats.active.combatants.find((c) => c.actor.id == sheet.actor.id);
+			if (activeCombatant)
+				SFI.chooseRoundAction(activeCombatant.id);
+		}, true);
+	}
 };
 
 export const SFIPatchCombatTracker = (html) => {

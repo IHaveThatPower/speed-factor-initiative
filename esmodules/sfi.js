@@ -45,6 +45,7 @@ Hooks.once("ready", function() {
 	{
 		ui.notifications.error("Module SFI requires the 'libWrapper' module. Please install and activate it.");
 	}
+	CONFIG.Actor.sheetClasses = SFIPatchActorSheet5e(CONFIG.Actor.sheetClasses);
 	if (game.combats.active)
 	{
 		console.log("SFI | Active combat detected; activating SFI socket");
@@ -87,7 +88,6 @@ Hooks.on("renderCombatTracker", function(tracker, html, data) {
  * When a character sheet is rendered, patch how it shows initiative
  */
 Hooks.on("renderActorSheet5eCharacter", function(sheet, html, data) {
-	sheet = SFIPatchActorSheet5e(sheet);
 	SFIPatchAddInitiativeListeners(sheet, html);
 });
 
